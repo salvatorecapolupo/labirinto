@@ -58,22 +58,21 @@
     #phaseMessage {
       position: absolute;
       top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
       background: black;
       color: #00ffcc;
       font-size: 2rem;
       padding: 10px 20px;
       border: 2px solid #00ffff;
-      animation: fadeOut 3s ease-out forwards;
-    }
-    @keyframes fadeOut {
-      0% { opacity: 1; }
-      100% { opacity: 0; display: none; }
+      display: none;
+      z-index: 10;
     }
   </style>
 </head>
 <body>
   <h1>Labirinto con DFS & Backtracking</h1>
-  <div id="phaseMessage" style="display:none"></div>
+  <div id="phaseMessage"></div>
   <canvas id="mazeCanvas"></canvas>
   <div id="legend">Legenda: <span style="color: yellow">i = Inizio</span>, <span style="color: lime">f = Fine</span></div>
   <div id="controls">
@@ -92,9 +91,6 @@
       const msg = document.getElementById('phaseMessage');
       msg.textContent = text;
       msg.style.display = 'block';
-      msg.classList.remove('fade');
-      void msg.offsetWidth; // reset animation
-      msg.classList.add('fade');
       setTimeout(() => {
         msg.style.display = 'none';
       }, 3000);
