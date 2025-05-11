@@ -45,6 +45,16 @@
       font-size: 1rem;
       color: #ffffff;
     }
+    #log {
+      background-color: #001122;
+      border: 1px solid #00aaaa;
+      max-width: 90%;
+      margin: 10px;
+      padding: 10px;
+      height: 100px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+    }
   </style>
 </head>
 <body>
@@ -61,10 +71,22 @@
     <p><strong>Come funziona:</strong> Il labirinto viene generato usando <em>Depth-First Search</em> (DFS), una tecnica che visita ogni cella andando il più a fondo possibile prima di tornare indietro (<strong>backtracking</strong>) quando non trova più vie libere. Questo garantisce un labirinto completo con una sola uscita possibile.</p>
     <p><strong>Backtracking</strong> significa provare una strada, e se non funziona, tornare indietro fino al punto dove si può fare una nuova scelta. È come esplorare un labirinto segnandosi il percorso, e cancellando le vie sbagliate.</p>
   </div>
-
+  <div id="log"></div>
   <script>
     const canvas = document.getElementById("mazeCanvas");
     const ctx = canvas.getContext("2d");
+    const logBox = document.getElementById("log");
+
+    function logStep(message) {
+      const line = document.createElement("div");
+      line.textContent = message;
+      logBox.appendChild(line);
+      logBox.scrollTop = logBox.scrollHeight;
+      if (logBox.childElementCount > 20) {
+        logBox.removeChild(logBox.firstChild);
+      }
+    }
+
     let cols, rows, cellSize;
     let maze = [];
     let stack = [];
@@ -123,6 +145,7 @@
     }
 
     function generateMaze() {
+      logStep("Generazione nuovo labirinto...");
       setupCanvas();
       maze = [];
       for (let y = 0; y < rows; y++) {
@@ -145,6 +168,7 @@
           clearInterval(interval);
           drawMaze();
           markPoints();
+          logStep("Labirinto generato!");
           return;
         }
         drawMaze();
@@ -154,6 +178,7 @@
           next.visited = true;
           stack.push(next);
           removeWalls(current, next);
+          logStep(`Avanzamento: (${next.x}, ${next.y})`);
         } else {
           stack.pop();
         }
@@ -199,6 +224,7 @@
     }
 
     function solveMazeStepByStep() {
+      logStep("Avvio della risoluzione con DFS...");
       let start = entryCell;
       let end = exitCell;
       let visited = new Set();
@@ -230,11 +256,13 @@
       const interval = setInterval(() => {
         if (i >= path.length) {
           clearInterval(interval);
+          logStep("Percorso trovato!");
           return;
         }
         drawMaze();
         markPoints();
         path[i].draw(true, "red");
+        logStep(`Passo ${i + 1}: (${path[i].x}, ${path[i].y})`);
         i++;
       }, 50);
     }
@@ -244,6 +272,7 @@
       userPath = [];
       drawMaze();
       markPoints();
+      logStep("Maze resettato.");
     }
 
     function drawUserPath() {
@@ -281,8 +310,10 @@
       }
 
       if (userPath[0] === entryCell && userPath[userPath.length - 1] === exitCell && isPathValid(userPath)) {
+        logStep("Percorso utente valido!");
         alert("Bravo! Hai trovato l'uscita!");
       } else {
+        logStep("Percorso utente non valido.");
         alert("Percorso non valido o non completo.");
       }
     }
