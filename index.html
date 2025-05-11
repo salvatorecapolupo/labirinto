@@ -1,0 +1,196 @@
+<!DOCTYPE html> 
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulatore Labirinto</title>
+  <style>
+    body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    canvas { background: white; border: 2px solid #000; }
+  </style>
+</head>
+<body>
+  <canvas id="mazeCanvas" width="603" height="603"></canvas>
+  <script>
+    const canvas = document.getElementById("mazeCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const cols = 21; // numero dispari
+    const rows = 21;
+    const cellSize = 30;
+    const wallWidth = 3;
+
+    const grid = [];
+    const stack = [];
+
+    // Crea le celle
+    class Cell {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.walls = [true, true, true, true]; // top, right, bottom, left
+        this.visited = false;
+      }
+
+      draw() {
+        const x = this.x * cellSize;
+        const y = this.y * cellSize;
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = wallWidth;
+
+        if (this.walls[0]) drawLine(x, y, x + cellSize, y); // top
+        if (this.walls[1]) drawLine(x + cellSize, y, x + cellSize, y + cellSize); // right
+        if (this.walls[2]) drawLine(x + cellSize, y + cellSize, x, y + cellSize); // bottom
+        if (this.walls[3]) drawLine(x, y + cellSize, x, y); // left
+      }
+
+      checkNeighbors() {
+        const neighbors = [];
+
+        const top = grid[index(this.x, this.y - 1)];
+        const right = grid[index(this.x + 1, this.y)];
+        const bottom = grid[index(this.x, this.y + 1)];
+        const left = grid[index(this.x - 1, this.y)];
+
+        if (top && !top.visited) neighbors.push(top);
+        if (right && !right.visited) neighbors.push(right);
+        if (bottom && !bottom.visited) neighbors.push(bottom);
+        if (left && !left.visited) neighbors.push(left);
+
+        if (neighbors.length > 0) {
+          const r = Math.floor(Math.random() * neighbors.length);
+          return neighbors[r];
+        } else {
+          return undefined;
+        }
+      }
+    }
+
+    function index(x, y) {
+      if (x < 0 || y < 0 || x >= cols || y >= rows) return -1;
+      return x + y * cols;
+    }
+
+    function drawLine(x1, y1, x2, y2) {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+
+    // Inizializzazione griglia
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const cell = new Cell(x, y);
+        grid.push(cell);
+      }
+    }
+
+    // Generazione labirinto
+    let current = grid[0];
+    current.visited = true;
+
+    function generateMazeStep() {
+      const next = current.checkNeighbors();
+      if (next) {
+        next.visited = true;
+        stack.push(current);
+
+        removeWalls(current, next);
+
+        current = next;
+        drawMaze();
+        requestAnimationFrame(generateMazeStep);
+      } else if (stack.length > 0) {
+        current = stack.pop();
+        drawMaze();
+        requestAnimationFrame(generateMazeStep);
+      } else {
+        drawMaze();
+        setTimeout(() => solveMaze(startCell), 500); // Dopo generazione, avvia la soluzione
+      }
+    }
+
+    function removeWalls(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+
+      if (dx === 1) {
+        a.walls[3] = false;
+        b.walls[1] = false;
+      } else if (dx === -1) {
+        a.walls[1] = false;
+        b.walls[3] = false;
+      }
+      if (dy === 1) {
+        a.walls[0] = false;
+        b.walls[2] = false;
+      } else if (dy === -1) {
+        a.walls[2] = false;
+        b.walls[0] = false;
+      }
+    }
+
+    function drawMaze() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      grid.forEach(cell => cell.draw());
+    }
+
+    // Soluzione con DFS visuale
+    const pathStack = [];
+    let startCell = grid[index(Math.floor(cols / 2), Math.floor(rows / 2))];
+    let visitedSolve = new Set();
+
+    function solveMaze(cell) {
+      visitedSolve.add(cell);
+      pathStack.push(cell);
+
+      drawMaze();
+      drawPath(pathStack);
+
+      if (cell.x === 0 || cell.y === 0 || cell.x === cols - 1 || cell.y === rows - 1) {
+        return; // Uscita trovata
+      }
+
+      const directions = [
+        [0, -1, 0], // top
+        [1, 0, 1], // right
+        [0, 1, 2], // bottom
+        [-1, 0, 3] // left
+      ];
+
+      for (let [dx, dy, dir] of directions) {
+        const nx = cell.x + dx;
+        const ny = cell.y + dy;
+        const neighbor = grid[index(nx, ny)];
+        if (!neighbor || visitedSolve.has(neighbor)) continue;
+
+        if (!cell.walls[dir]) {
+          setTimeout(() => {
+            solveMaze(neighbor);
+          }, 30);
+          return;
+        }
+      }
+
+      pathStack.pop(); // backtrack
+      setTimeout(() => {
+        solveMaze(pathStack[pathStack.length - 1]);
+      }, 30);
+    }
+
+    function drawPath(stack) {
+      ctx.fillStyle = "red";
+      for (const cell of stack) {
+        const x = cell.x * cellSize + cellSize / 2;
+        const y = cell.y * cellSize + cellSize / 2;
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    generateMazeStep(); // avvia generazione
+  </script>
+</body>
+</html>
