@@ -1,34 +1,59 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Simulatore Labirinto</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Labirinto Retro</title>
   <style>
-    body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; }
-    canvas { background: white; border: 2px solid #000; }
+    body {
+      margin: 0;
+      background: black;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: monospace;
+    }
+
+    canvas {
+      border: 3px solid #0f0;
+      background: #fff;
+      margin-bottom: 10px;
+    }
+
+    button {
+      background: #111;
+      color: #0f0;
+      font-size: 1rem;
+      border: 2px solid #0f0;
+      padding: 8px 16px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0f0;
+      color: #000;
+    }
   </style>
 </head>
 <body>
   <canvas id="mazeCanvas" width="603" height="603"></canvas>
+  <button onclick="restart()">Restart</button>
+
   <script>
     const canvas = document.getElementById("mazeCanvas");
     const ctx = canvas.getContext("2d");
+    const cols = 21, rows = 21;
+    const cellSize = 30, wallWidth = 3;
+    let grid = [], stack = [], pathStack = [];
+    let current, visitedSolve = new Set(), startCell;
+    let solving = false;
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-    const cols = 21; // numero dispari
-    const rows = 21;
-    const cellSize = 30;
-    const wallWidth = 3;
-
-    const grid = [];
-    const stack = [];
-
-    // Crea le celle
     class Cell {
       constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.walls = [true, true, true, true]; // top, right, bottom, left
+        this.walls = [true, true, true, true];
         this.visited = false;
       }
 
@@ -46,7 +71,6 @@
 
       checkNeighbors() {
         const neighbors = [];
-
         const top = grid[index(this.x, this.y - 1)];
         const right = grid[index(this.x + 1, this.y)];
         const bottom = grid[index(this.x, this.y + 1)];
@@ -58,11 +82,8 @@
         if (left && !left.visited) neighbors.push(left);
 
         if (neighbors.length > 0) {
-          const r = Math.floor(Math.random() * neighbors.length);
-          return neighbors[r];
-        } else {
-          return undefined;
-        }
+          return neighbors[Math.floor(Math.random() * neighbors.length)];
+        } else return undefined;
       }
     }
 
@@ -78,26 +99,27 @@
       ctx.stroke();
     }
 
-    // Inizializzazione griglia
-    for (let y = 0; y < rows; y++) {
-      for (let x = 0; x < cols; x++) {
-        const cell = new Cell(x, y);
-        grid.push(cell);
+    function initGrid() {
+      grid = [];
+      stack = [];
+      pathStack = [];
+      visitedSolve = new Set();
+      solving = false;
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          grid.push(new Cell(x, y));
+        }
       }
+      current = grid[0];
+      current.visited = true;
     }
-
-    // Generazione labirinto
-    let current = grid[0];
-    current.visited = true;
 
     function generateMazeStep() {
       const next = current.checkNeighbors();
       if (next) {
         next.visited = true;
         stack.push(current);
-
         removeWalls(current, next);
-
         current = next;
         drawMaze();
         requestAnimationFrame(generateMazeStep);
@@ -107,56 +129,41 @@
         requestAnimationFrame(generateMazeStep);
       } else {
         drawMaze();
-        setTimeout(() => solveMaze(startCell), 500); // Dopo generazione, avvia la soluzione
+        showMessage("Risoluzione in corso...", () => {
+          solving = true;
+          startCell = grid[index(Math.floor(cols / 2), Math.floor(rows / 2))];
+          solveMaze(startCell);
+        });
       }
     }
 
     function removeWalls(a, b) {
       const dx = a.x - b.x;
       const dy = a.y - b.y;
-
-      if (dx === 1) {
-        a.walls[3] = false;
-        b.walls[1] = false;
-      } else if (dx === -1) {
-        a.walls[1] = false;
-        b.walls[3] = false;
-      }
-      if (dy === 1) {
-        a.walls[0] = false;
-        b.walls[2] = false;
-      } else if (dy === -1) {
-        a.walls[2] = false;
-        b.walls[0] = false;
-      }
+      if (dx === 1) { a.walls[3] = false; b.walls[1] = false; }
+      else if (dx === -1) { a.walls[1] = false; b.walls[3] = false; }
+      if (dy === 1) { a.walls[0] = false; b.walls[2] = false; }
+      else if (dy === -1) { a.walls[2] = false; b.walls[0] = false; }
     }
 
     function drawMaze() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       grid.forEach(cell => cell.draw());
+      if (solving) drawPath(pathStack);
     }
-
-    // Soluzione con DFS visuale
-    const pathStack = [];
-    let startCell = grid[index(Math.floor(cols / 2), Math.floor(rows / 2))];
-    let visitedSolve = new Set();
 
     function solveMaze(cell) {
       visitedSolve.add(cell);
       pathStack.push(cell);
-
       drawMaze();
-      drawPath(pathStack);
-
+      playTone(cell.x + cell.y);
       if (cell.x === 0 || cell.y === 0 || cell.x === cols - 1 || cell.y === rows - 1) {
-        return; // Uscita trovata
+        showMessage("Uscita trovata!");
+        return;
       }
 
       const directions = [
-        [0, -1, 0], // top
-        [1, 0, 1], // right
-        [0, 1, 2], // bottom
-        [-1, 0, 3] // left
+        [0, -1, 0], [1, 0, 1], [0, 1, 2], [-1, 0, 3]
       ];
 
       for (let [dx, dy, dir] of directions) {
@@ -164,19 +171,14 @@
         const ny = cell.y + dy;
         const neighbor = grid[index(nx, ny)];
         if (!neighbor || visitedSolve.has(neighbor)) continue;
-
         if (!cell.walls[dir]) {
-          setTimeout(() => {
-            solveMaze(neighbor);
-          }, 30);
+          setTimeout(() => solveMaze(neighbor), 40);
           return;
         }
       }
 
-      pathStack.pop(); // backtrack
-      setTimeout(() => {
-        solveMaze(pathStack[pathStack.length - 1]);
-      }, 30);
+      pathStack.pop();
+      setTimeout(() => solveMaze(pathStack[pathStack.length - 1]), 40);
     }
 
     function drawPath(stack) {
@@ -190,7 +192,44 @@
       }
     }
 
-    generateMazeStep(); // avvia generazione
+    function playTone(sum) {
+      const freq = 200 + sum * 10;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.1);
+    }
+
+    function showMessage(msg, callback = null) {
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.fillRect(0, canvas.height / 2 - 30, canvas.width, 60);
+      ctx.fillStyle = "#000";
+      ctx.font = "24px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(msg, canvas.width / 2, canvas.height / 2 + 10);
+      if (callback) {
+        setTimeout(() => {
+          drawMaze();
+          callback();
+        }, 1500);
+      }
+    }
+
+    function restart() {
+      initGrid();
+      drawMaze();
+      showMessage("Generazione labirinto con DFS ricorsivo...", () => {
+        showMessage("Generazione labirinto...");
+        generateMazeStep();
+      });
+    }
+
+    restart();
   </script>
 </body>
 </html>
