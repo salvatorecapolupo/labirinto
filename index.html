@@ -55,14 +55,29 @@
       overflow-y: auto;
       font-size: 0.85rem;
     }
+    #phaseMessage {
+      position: absolute;
+      top: 40%;
+      background: black;
+      color: #00ffcc;
+      font-size: 2rem;
+      padding: 10px 20px;
+      border: 2px solid #00ffff;
+      animation: fadeOut 3s ease-out forwards;
+    }
+    @keyframes fadeOut {
+      0% { opacity: 1; }
+      100% { opacity: 0; display: none; }
+    }
   </style>
 </head>
 <body>
   <h1>Labirinto con DFS & Backtracking</h1>
+  <div id="phaseMessage" style="display:none"></div>
   <canvas id="mazeCanvas"></canvas>
   <div id="legend">Legenda: <span style="color: yellow">i = Inizio</span>, <span style="color: lime">f = Fine</span></div>
   <div id="controls">
-    <button onclick="generateMaze()">Genera</button>
+    <button onclick="generateMazeWithAnimation()">Genera</button>
     <button onclick="solveMazeStepByStep()">Risolvi</button>
     <button onclick="resetMaze()">Reset</button>
     <button onclick="verifyUserPath()">Testa Soluzione</button>
@@ -73,7 +88,22 @@
   </div>
   <div id="log"></div>
   <script>
-    // (Codice aggiornato separatamente per migliorare usabilità e traccia)
+    function showPhaseMessage(text) {
+      const msg = document.getElementById('phaseMessage');
+      msg.textContent = text;
+      msg.style.display = 'block';
+      msg.classList.remove('fade');
+      void msg.offsetWidth; // reset animation
+      msg.classList.add('fade');
+      setTimeout(() => {
+        msg.style.display = 'none';
+      }, 3000);
+    }
+
+    function generateMazeWithAnimation() {
+      showPhaseMessage('Generazione Labirinto...');
+      setTimeout(() => generateMaze(), 100);
+    }
   </script>
 </body>
 </html>
