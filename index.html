@@ -68,24 +68,50 @@
       return actions;
     }
 
-    function train(episodes = 1000, alpha = 0.1, gamma = 0.9, epsilon = 0.2) {
-      for (let i = 0; i < episodes; i++) {
-        let pos = [0, 0];
-        while (true) {
-          const key = stateKey(pos);
-          q[key] = q[key] || {};
-          const actions = availableActions(pos);
-          const a = Math.random() < epsilon ? actions[Math.floor(Math.random() * actions.length)] : actions.reduce((best, a) => q[key][a] > (q[key][best] || 0) ? a : best, actions[0]);
-          const next = [pos[0] + a[0], pos[1] + a[1]];
-          const reward = (next[0] === goal[0] && next[1] === goal[1]) ? 100 : -1;
-          const nextKey = stateKey(next);
-          q[key][a] = (q[key][a] || 0) + alpha * (reward + gamma * Math.max(...Object.values(q[nextKey] || {})) - (q[key][a] || 0));
-          pos = next;
-          if (pos[0] === goal[0] && pos[1] === goal[1]) break;
-        }
-      }
+    function train(episodes = 100, alpha = 0.1, gamma = 0.9, epsilon = 0.2) {
+  let i = 0;
+
+  function trainEpisode() {
+    if (i >= episodes) {
       alert("Addestramento completato!");
+      return;
     }
+
+    let pos = [0, 0];
+
+    while (true) {
+      const key = stateKey(pos);
+      q[key] = q[key] || {};
+      const actions = availableActions(pos);
+      const a = Math.random() < epsilon
+        ? actions[Math.floor(Math.random() * actions.length)]
+        : actions.reduce((best, a) => {
+            const aKey = JSON.stringify(a);
+            return (q[key][aKey] || 0) > (q[key][JSON.stringify(best)] || 0) ? a : best;
+          }, actions[0]);
+      
+      const next = [pos[0] + a[0], pos[1] + a[1]];
+      const reward = (next[0] === goal[0] && next[1] === goal[1]) ? 100 : -1;
+      const nextKey = stateKey(next);
+      q[nextKey] = q[nextKey] || {};
+      const aKey = JSON.stringify(a);
+      const maxQ = Math.max(...Object.values(q[nextKey]).concat(0));
+      q[key][aKey] = (q[key][aKey] || 0) + alpha * (reward + gamma * maxQ - (q[key][aKey] || 0));
+
+      pos = next;
+      if (pos[0] === goal[0] && pos[1] === goal[1]) break;
+    }
+
+    i++;
+    if (i % 50 === 0) {
+      renderMaze(); // facoltativo: visualizza ogni tot episodi
+    }
+    setTimeout(trainEpisode, 1); // respiro per il browser
+  }
+
+  trainEpisode();
+}
+
 
     async function runAgent() {
       agent = [0, 0];
