@@ -34,35 +34,43 @@
     }
 
     .cell {
-      width: 20px;
-      height: 20px;
-      box-sizing: border-box;
-      border: 1px solid #000;
-      position: relative;
-    }
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  position: relative;
+  border: none;
+  background-color: white;
+}
 
-    .cell.visited {
-      background-color: #e0e0e0;
-    }
+.cell::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  right: 0; bottom: 0;
+  border-top: 1px solid black;
+  border-right: 1px solid black;
+  border-bottom: 1px solid black;
+  border-left: 1px solid black;
+  pointer-events: none;
+}
 
-    .cell.start {
-      background-color: #5cb85c !important;
-    }
+.cell.visited {
+  background-color: #e0e0e0;
+}
 
-    .cell.end {
-      background-color: #d9534f !important;
-    }
+.cell.start {
+  background-color: #5cb85c;
+}
 
-    .cell.path {
-      background-color: #5bc0de !important;
-    }
+.cell.end {
+  background-color: #d9534f;
+}
 
-    @media (max-width: 600px) {
-      .cell {
-        width: 15px;
-        height: 15px;
-      }
-    }
+.cell.path {
+  background-color: #5bc0de;
+}
+
+    
   </style>
 </head>
 <body>
@@ -96,13 +104,18 @@
         mazeContainer.appendChild(this.element);
       }
 
-      updateStyle() {
-        const { top, right, bottom, left } = this.walls;
-        this.element.style.borderTop = top ? '1px solid black' : 'none';
-        this.element.style.borderRight = right ? '1px solid black' : 'none';
-        this.element.style.borderBottom = bottom ? '1px solid black' : 'none';
-        this.element.style.borderLeft = left ? '1px solid black' : 'none';
-      }
+updateStyle() {
+  const { top, right, bottom, left } = this.walls;
+  this.element.style.setProperty('--border-top', top ? '1px solid black' : 'none');
+  this.element.style.setProperty('--border-right', right ? '1px solid black' : 'none');
+  this.element.style.setProperty('--border-bottom', bottom ? '1px solid black' : 'none');
+  this.element.style.setProperty('--border-left', left ? '1px solid black' : 'none');
+  this.element.style.borderTop = top ? '1px solid black' : 'none';
+  this.element.style.borderRight = right ? '1px solid black' : 'none';
+  this.element.style.borderBottom = bottom ? '1px solid black' : 'none';
+  this.element.style.borderLeft = left ? '1px solid black' : 'none';
+}
+
 
       getUnvisitedNeighbors() {
         const dirs = [
