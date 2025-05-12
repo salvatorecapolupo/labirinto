@@ -6,29 +6,33 @@
   <title>Labirinto Retrogame</title>
   <style>
     body {
+      margin: 0;
       background: black;
       color: lime;
       font-family: 'Courier New', monospace;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 1rem;
     }
-    h1 {
-      font-size: 2rem;
-      margin-bottom: 1rem;
+    h1, #message {
+      font-size: 1.5rem;
+      text-align: center;
+      margin: 1rem;
+      color: lime;
     }
     canvas {
       border: 2px solid lime;
       touch-action: none;
-      margin-bottom: 1rem;
+      background: black;
+      display: block;
+      margin: auto;
     }
     button {
       background: black;
       color: lime;
       border: 2px solid lime;
       padding: 0.5rem 1rem;
-      margin: 0.2rem;
+      margin: 0.3rem;
       cursor: pointer;
       font-family: 'Courier New', monospace;
     }
@@ -36,43 +40,51 @@
       background: lime;
       color: black;
     }
+    #controls {
+      margin-top: 0.5rem;
+    }
     #info {
-      max-width: 600px;
-      margin-top: 1rem;
+      max-width: 700px;
+      margin: 1rem;
       font-size: 1rem;
+      color: lime;
     }
   </style>
 </head>
 <body>
-  <h1>🕹️ RISOLVI IL LABIRINTO!</h1>
-  <canvas id="mazeCanvas" width="400" height="400"></canvas>
-  <div>
-    <button onclick="generateMaze()">🎲 Nuovo Labirinto</button>
+  <h1>🕹️ LABIRINTO RETROGAME</h1>
+  <div id="message">GENERAZIONE...</div>
+  <canvas id="mazeCanvas"></canvas>
+  <div id="controls">
+    <button onclick="generateMaze()">🎲 Nuovo</button>
     <button onclick="resetPath()">🔁 Reset</button>
     <button onclick="showSolution()">🧠 Soluzione</button>
   </div>
   <p id="info">
-    Questo labirinto è generato usando l'algoritmo *Depth-First Search (DFS) backtracking*,
-    che garantisce una soluzione univoca. Partendo da una cella iniziale, si esplorano vicoli ciechi,
-    tornando indietro quando necessario, fino a coprire ogni cella. Per trovare la soluzione,
-    applichiamo una DFS simile per tracciare il cammino dall'ingresso all'uscita.
+    Questo labirinto è generato con l’algoritmo DFS (Depth-First Search) che garantisce un percorso unico tra inizio e fine.  
+    L’utente si muove solo lungo i corridoi validi. La soluzione viene rivelata progressivamente con un suono crescente.
   </p>
+  <audio id="bgMusic" src="https://example.com/musica-retro.mp3" autoplay loop></audio>
 
   <script>
     const canvas = document.getElementById('mazeCanvas');
     const ctx = canvas.getContext('2d');
-    const cols = 20, rows = 20;
-    const cellSize = canvas.width / cols;
-    let grid = [], stack = [];
-    let current;
-    let solutionPath = [];
-    let drawing = false, path = [];
+    const message = document.getElementById('message');
+    const bgMusic = document.getElementById('bgMusic');
+    bgMusic.volume = 0.75;
+
+    let cols, rows, cellSize;
+    let grid = [], stack = [], current;
+    let path = [], solutionPath = [];
+    let userPos = {i: 0, j: 0};
+
+    let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
     class Cell {
       constructor(i, j) {
         this.i = i;
         this.j = j;
-        this.walls = [true, true, true, true]; // top, right, bottom, left
+        this.walls = [true, true, true, true];
         this.visited = false;
       }
 
@@ -95,21 +107,18 @@
 
         if (neighbors.length > 0) {
           return neighbors[Math.floor(Math.random() * neighbors.length)];
-        } else {
-          return undefined;
-        }
+        } else return undefined;
       }
 
       show() {
-        let x = this.i * cellSize;
-        let y = this.j * cellSize;
+        const x = this.i * cellSize;
+        const y = this.j * cellSize;
         ctx.strokeStyle = 'lime';
         ctx.lineWidth = 2;
-
-        if (this.walls[0]) drawLine(x, y, x + cellSize, y);         // top
-        if (this.walls[1]) drawLine(x + cellSize, y, x + cellSize, y + cellSize); // right
-        if (this.walls[2]) drawLine(x + cellSize, y + cellSize, x, y + cellSize); // bottom
-        if (this.walls[3]) drawLine(x, y + cellSize, x, y);         // left
+        if (this.walls[0]) drawLine(x, y, x + cellSize, y);
+        if (this.walls[1]) drawLine(x + cellSize, y, x + cellSize, y + cellSize);
+        if (this.walls[2]) drawLine(x + cellSize, y + cellSize, x, y + cellSize);
+        if (this.walls[3]) drawLine(x, y + cellSize, x, y);
       }
     }
 
@@ -121,75 +130,121 @@
     }
 
     function removeWalls(a, b) {
-      let dx = a.i - b.i;
+      const dx = a.i - b.i;
+      const dy = a.j - b.j;
       if (dx === 1) { a.walls[3] = false; b.walls[1] = false; }
       else if (dx === -1) { a.walls[1] = false; b.walls[3] = false; }
-      let dy = a.j - b.j;
       if (dy === 1) { a.walls[0] = false; b.walls[2] = false; }
       else if (dy === -1) { a.walls[2] = false; b.walls[0] = false; }
     }
 
     function generateMaze() {
+      message.textContent = "GENERAZIONE...";
+      resizeCanvas();
       grid = [];
+      stack = [];
       path = [];
-      solutionPath = [];
       for (let j = 0; j < rows; j++) {
         for (let i = 0; i < cols; i++) {
           grid.push(new Cell(i, j));
         }
       }
       current = grid[0];
-      stack = [];
-
-      function stepMaze() {
+      function step() {
         current.visited = true;
-        let next = current.checkNeighbors();
+        const next = current.checkNeighbors();
         if (next) {
           next.visited = true;
           stack.push(current);
           removeWalls(current, next);
           current = next;
-          setTimeout(stepMaze, 0);
+          requestAnimationFrame(step);
         } else if (stack.length > 0) {
           current = stack.pop();
-          setTimeout(stepMaze, 0);
+          requestAnimationFrame(step);
         } else {
           drawMaze();
+          message.textContent = "PRONTO? TRACCIA IL PERCORSO!";
+          userPos = {i: 0, j: 0};
+          path = [userPos];
+          drawUserPath();
         }
       }
-      stepMaze();
+      step();
+    }
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth * 0.9;
+      canvas.height = window.innerHeight * 0.6;
+      cols = 20;
+      cellSize = Math.floor(canvas.width / cols);
+      rows = Math.floor(canvas.height / cellSize);
     }
 
     function drawMaze() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      grid.forEach(cell => cell.show());
+      grid.forEach(c => c.show());
       drawStartEnd();
     }
 
     function drawStartEnd() {
       ctx.fillStyle = 'lime';
-      ctx.fillRect(2, 2, cellSize - 4, cellSize - 4); // Start
+      ctx.fillRect(2, 2, cellSize - 4, cellSize - 4);
       ctx.fillRect(
         (cols - 1) * cellSize + 2,
         (rows - 1) * cellSize + 2,
         cellSize - 4,
         cellSize - 4
-      ); // End
+      );
     }
 
     function resetPath() {
-      path = [];
+      userPos = {i: 0, j: 0};
+      path = [userPos];
       drawMaze();
+      drawUserPath();
     }
 
-    function showSolution() {
-      solveMaze();
-      ctx.strokeStyle = 'red';
+    canvas.addEventListener("pointerdown", e => moveFromEvent(e));
+    canvas.addEventListener("pointermove", e => moveFromEvent(e));
+
+    function moveFromEvent(e) {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const i = Math.floor(x / cellSize);
+      const j = Math.floor(y / cellSize);
+
+      if (i === userPos.i && j === userPos.j) return;
+
+      const dirI = i - userPos.i;
+      const dirJ = j - userPos.j;
+
+      if (Math.abs(dirI) + Math.abs(dirJ) === 1) {
+        const currentCell = grid[userPos.i + userPos.j * cols];
+        const nextCell = grid[i + j * cols];
+        if (!currentCell || !nextCell) return;
+        const dirMap = {
+          "0,-1": 0, "1,0": 1, "0,1": 2, "-1,0": 3
+        };
+        const wallDir = dirMap[`${dirI},${dirJ}`];
+        if (!currentCell.walls[wallDir]) {
+          userPos = {i, j};
+          path.push(userPos);
+          drawUserPath();
+        }
+      }
+    }
+
+    function drawUserPath() {
+      drawMaze();
+      ctx.strokeStyle = 'aqua';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      solutionPath.forEach((pt, idx) => {
-        let x = pt.i * cellSize + cellSize / 2;
-        let y = pt.j * cellSize + cellSize / 2;
+      path.forEach((pt, idx) => {
+        const x = pt.i * cellSize + cellSize / 2;
+        const y = pt.j * cellSize + cellSize / 2;
         if (idx === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       });
@@ -197,18 +252,18 @@
     }
 
     function solveMaze() {
-      let visited = new Set();
+      message.textContent = "SOLUZIONE IN CORSO...";
       solutionPath = [];
+      const visited = new Set();
       function dfs(cell) {
         solutionPath.push(cell);
         if (cell.i === cols - 1 && cell.j === rows - 1) return true;
         visited.add(cell.i + ',' + cell.j);
-        const dirs = [
-          [0, -1, 0], [1, 0, 1], [0, 1, 2], [-1, 0, 3]
-        ];
+        const dirs = [[0,-1,0], [1,0,1], [0,1,2], [-1,0,3]];
         for (let [dx, dy, dir] of dirs) {
-          let ni = cell.i + dx, nj = cell.j + dy;
-          let neighbor = grid[cell.index(ni, nj)];
+          const ni = cell.i + dx;
+          const nj = cell.j + dy;
+          const neighbor = grid[cell.index(ni, nj)];
           if (!neighbor || visited.has(ni + ',' + nj)) continue;
           if (!cell.walls[dir]) {
             if (dfs(neighbor)) return true;
@@ -220,46 +275,43 @@
       dfs(grid[0]);
     }
 
-    canvas.addEventListener('pointerdown', e => {
-      drawing = true;
-      path.push(getCellFromEvent(e));
-      drawUserPath();
-    });
-
-    canvas.addEventListener('pointermove', e => {
-      if (!drawing) return;
-      const cell = getCellFromEvent(e);
-      if (!path.includes(cell)) {
-        path.push(cell);
-        drawUserPath();
-      }
-    });
-
-    canvas.addEventListener('pointerup', () => drawing = false);
-
-    function getCellFromEvent(e) {
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const i = Math.floor(x / cellSize);
-      const j = Math.floor(y / cellSize);
-      return { i, j };
-    }
-
-    function drawUserPath() {
-      drawMaze();
-      ctx.strokeStyle = 'aqua';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      path.forEach((pt, idx) => {
-        let x = pt.i * cellSize + cellSize / 2;
-        let y = pt.j * cellSize + cellSize / 2;
-        if (idx === 0) ctx.moveTo(x, y);
+    function showSolution() {
+      solveMaze();
+      let i = 0;
+      function drawStep() {
+        if (i >= solutionPath.length) {
+          message.textContent = "FINE!";
+          return;
+        }
+        const pt = solutionPath[i];
+        const x = pt.i * cellSize + cellSize / 2;
+        const y = pt.j * cellSize + cellSize / 2;
+        if (i === 0) ctx.beginPath();
         else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
+        if (i === 0) ctx.moveTo(x, y);
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        playBeep(i);
+        i++;
+        setTimeout(drawStep, 40);
+      }
+      drawStep();
     }
 
+    function playBeep(step) {
+      const oscillator = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(200 + step * 10, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.02, audioCtx.currentTime);
+      oscillator.connect(gain);
+      gain.connect(audioCtx.destination);
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.1);
+    }
+
+    window.addEventListener('resize', generateMaze);
     generateMaze();
   </script>
 </body>
