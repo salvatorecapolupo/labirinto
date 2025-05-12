@@ -1,105 +1,167 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Simulatore Labirinto - DFS & Backtracking</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Simulatore Labirinto DFS</title>
   <style>
     body {
-      margin: 0;
-      font-family: monospace;
-      background: black;
-      color: #00ffcc;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f0f0f0;
     }
-    canvas {
-      background: #000033;
-      touch-action: none;
-      border: 5px solid #00ffff;
-      box-shadow: 0 0 20px #00ffff;
+
+    h1 {
+      margin-top: 20px;
     }
+
     #controls {
-      margin-top: 10px;
+      margin: 20px;
     }
-    button {
-      margin: 5px;
-      padding: 10px 15px;
-      font-size: 1rem;
-      background-color: #000;
-      border: 1px solid #00ffff;
-      color: #00ffff;
-      cursor: pointer;
+
+    #maze {
+      display: grid;
+      margin: 0 auto;
+      width: fit-content;
     }
-    button:hover {
-      background-color: #002244;
+
+    .cell {
+      width: 20px;
+      height: 20px;
+      box-sizing: border-box;
+      border: 1px solid #000;
     }
-    #info {
-      max-width: 600px;
-      margin: 10px;
-      font-size: 0.9rem;
-    }
-    #legend {
-      margin: 10px;
-      font-size: 1rem;
-      color: #ffffff;
-    }
-    #log {
-      background-color: #001122;
-      border: 1px solid #00aaaa;
-      max-width: 90%;
-      margin: 10px;
-      padding: 10px;
-      height: 100px;
-      overflow-y: auto;
-      font-size: 0.85rem;
-    }
-    #phaseMessage {
-      position: absolute;
-      top: 40%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: black;
-      color: #00ffcc;
-      font-size: 2rem;
-      padding: 10px 20px;
-      border: 2px solid #00ffff;
-      display: none;
-      z-index: 10;
+
+    .cell.visited {
+      background-color: #e0e0e0;
     }
   </style>
 </head>
 <body>
-  <h1>Labirinto con DFS & Backtracking</h1>
-  <div id="phaseMessage"></div>
-  <canvas id="mazeCanvas"></canvas>
-  <div id="legend">Legenda: <span style="color: yellow">i = Inizio</span>, <span style="color: lime">f = Fine</span></div>
+  <h1>Simulatore Labirinto - DFS & Backtracking</h1>
   <div id="controls">
-    <button onclick="generateMazeWithAnimation()">Genera</button>
-    <button onclick="solveMazeStepByStep()">Risolvi</button>
-    <button onclick="resetMaze()">Reset</button>
-    <button onclick="verifyUserPath()">Testa Soluzione</button>
+    <button id="generate">Genera</button>
+    <button id="reset">Reset</button>
   </div>
-  <div id="info">
-    <p><strong>Come funziona:</strong> Il labirinto viene generato usando <em>Depth-First Search</em> (DFS), una tecnica che visita ogni cella andando il più a fondo possibile prima di tornare indietro (<strong>backtracking</strong>) quando non trova più vie libere. Questo garantisce un labirinto completo con una sola uscita possibile.</p>
-    <p><strong>Backtracking</strong> significa provare una strada, e se non funziona, tornare indietro fino al punto dove si può fare una nuova scelta. È come esplorare un labirinto segnandosi il percorso, e cancellando le vie sbagliate.</p>
-  </div>
-  <div id="log"></div>
+  <div id="maze"></div>
+
   <script>
-    function showPhaseMessage(text) {
-      const msg = document.getElementById('phaseMessage');
-      msg.textContent = text;
-      msg.style.display = 'block';
-      setTimeout(() => {
-        msg.style.display = 'none';
-      }, 3000);
+    const rows = 20;
+    const cols = 20;
+    let grid = [];
+    let stack = [];
+
+    const mazeContainer = document.getElementById('maze');
+    const generateBtn = document.getElementById('generate');
+    const resetBtn = document.getElementById('reset');
+
+    class Cell {
+      constructor(row, col) {
+        this.row = row;
+        this.col = col;
+        this.visited = false;
+        this.walls = { top: true, right: true, bottom: true, left: true };
+        this.element = document.createElement('div');
+        this.element.classList.add('cell');
+        mazeContainer.appendChild(this.element);
+      }
+
+      getUnvisitedNeighbors() {
+        const neighbors = [];
+
+        const directions = [
+          { row: -1, col: 0, wall: 'top', opposite: 'bottom' },
+          { row: 0, col: 1, wall: 'right', opposite: 'left' },
+          { row: 1, col: 0, wall: 'bottom', opposite: 'top' },
+          { row: 0, col: -1, wall: 'left', opposite: 'right' },
+        ];
+
+        for (const dir of directions) {
+          const newRow = this.row + dir.row;
+          const newCol = this.col + dir.col;
+
+          if (
+            newRow >= 0 &&
+            newRow < rows &&
+            newCol >= 0 &&
+            newCol < cols &&
+            !grid[newRow][newCol].visited
+          ) {
+            neighbors.push({ cell: grid[newRow][newCol], direction: dir });
+          }
+        }
+
+        return neighbors;
+      }
+
+      removeWall(neighbor, direction) {
+        this.walls[direction.wall] = false;
+        neighbor.walls[direction.opposite] = false;
+      }
+
+      updateStyle() {
+        const { top, right, bottom, left } = this.walls;
+        this.element.style.borderTop = top ? '1px solid #000' : 'none';
+        this.element.style.borderRight = right ? '1px solid #000' : 'none';
+        this.element.style.borderBottom = bottom ? '1px solid #000' : 'none';
+        this.element.style.borderLeft = left ? '1px solid #000' : 'none';
+        this.element.classList.add('visited');
+      }
     }
 
-    function generateMazeWithAnimation() {
-      showPhaseMessage('Generazione Labirinto...');
-      setTimeout(() => generateMaze(), 100);
+    function setupGrid() {
+      mazeContainer.innerHTML = '';
+      mazeContainer.style.gridTemplateRows = `repeat(${rows}, 20px)`;
+      mazeContainer.style.gridTemplateColumns = `repeat(${cols}, 20px)`;
+      grid = [];
+
+      for (let row = 0; row < rows; row++) {
+        const rowArray = [];
+        for (let col = 0; col < cols; col++) {
+          const cell = new Cell(row, col);
+          rowArray.push(cell);
+        }
+        grid.push(rowArray);
+      }
     }
+
+    function generateMaze() {
+      const startCell = grid[0][0];
+      startCell.visited = true;
+      stack.push(startCell);
+
+      while (stack.length > 0) {
+        const current = stack[stack.length - 1];
+        const neighbors = current.getUnvisitedNeighbors();
+
+        if (neighbors.length > 0) {
+          const { cell: next, direction } = neighbors[Math.floor(Math.random() * neighbors.length)];
+          current.removeWall(next, direction);
+          next.visited = true;
+          stack.push(next);
+        } else {
+          stack.pop();
+        }
+      }
+
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          grid[row][col].updateStyle();
+        }
+      }
+    }
+
+    generateBtn.addEventListener('click', () => {
+      setupGrid();
+      generateMaze();
+    });
+
+    resetBtn.addEventListener('click', () => {
+      setupGrid();
+    });
+
+    // Auto setup iniziale
+    setupGrid();
   </script>
 </body>
 </html>
