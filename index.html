@@ -2,317 +2,132 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Labirinto Retrogame</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RL Labirinto</title>
   <style>
-    body {
-      margin: 0;
-      background: black;
-      color: lime;
-      font-family: 'Courier New', monospace;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    h1, #message {
-      font-size: 1.5rem;
-      text-align: center;
-      margin: 1rem;
-      color: lime;
-    }
-    canvas {
-      border: 2px solid lime;
-      touch-action: none;
-      background: black;
-      display: block;
-      margin: auto;
-    }
-    button {
-      background: black;
-      color: lime;
-      border: 2px solid lime;
-      padding: 0.5rem 1rem;
-      margin: 0.3rem;
-      cursor: pointer;
-      font-family: 'Courier New', monospace;
-    }
-    button:hover {
-      background: lime;
-      color: black;
-    }
-    #controls {
-      margin-top: 0.5rem;
-    }
-    #info {
-      max-width: 700px;
-      margin: 1rem;
-      font-size: 1rem;
-      color: lime;
-    }
+    body { font-family: monospace; background: #111; color: #0f0; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; }
+    #maze { display: grid; grid-template-columns: repeat(5, 40px); grid-template-rows: repeat(5, 40px); margin: 20px; }
+    .cell { width: 40px; height: 40px; border: 1px solid #0f0; display: flex; align-items: center; justify-content: center; }
+    .wall { background: #0f0; color: #111; }
+    .agent { background: #0f0; color: #111; font-weight: bold; }
+    .goal { background: #f00; color: #fff; }
+    button { background: #0f0; color: #111; border: none; padding: 10px; margin: 5px; cursor: pointer; }
+    .panel { display: none; max-width: 600px; padding: 20px; border: 1px solid #0f0; margin-bottom: 10px; }
+    .panel.active { display: block; }
+    .controls { display: flex; justify-content: space-between; max-width: 600px; width: 100%; }
   </style>
 </head>
 <body>
-  <h1>🕹️ LABIRINTO RETROGAME</h1>
-  <div id="message">GENERAZIONE...</div>
-  <canvas id="mazeCanvas"></canvas>
-  <div id="controls">
-    <button onclick="generateMaze()">🎲 Nuovo</button>
-    <button onclick="resetPath()">🔁 Reset</button>
-    <button onclick="showSolution()">🧠 Soluzione</button>
+  <h1>Agente IA nel Labirinto</h1>
+  <div id="maze"></div>
+  <button onclick="train()">Allena Agente</button>
+  <button onclick="runAgent()">Esegui Agente</button>
+  <div class="panel active" id="panel0">
+    <h2>1. Definizione del problema</h2>
+    <p>L'agente si trova in un labirinto 5x5 e deve imparare a raggiungere l'uscita muovendosi tra celle libere ed evitando i muri.</p>
   </div>
-  <p id="info">
-    Questo labirinto è generato con l’algoritmo DFS (Depth-First Search) che garantisce un percorso unico tra inizio e fine.  
-    L’utente si muove solo lungo i corridoi validi. La soluzione viene rivelata progressivamente con un suono crescente.
-  </p>
-  <audio id="bgMusic" src="https://example.com/musica-retro.mp3" autoplay loop></audio>
-
+  <div class="panel" id="panel1">
+    <h2>2. Reinforcement Learning</h2>
+    <p>Utilizziamo il Q-learning: l'agente impara da prove ed errori aggiornando una tabella Q che assegna valore a ogni azione possibile in ogni stato.</p>
+  </div>
+  <div class="panel" id="panel2">
+    <h2>3. Ricompense</h2>
+    <p>L'agente riceve +100 per raggiungere l'obiettivo, -1 per ogni mossa e -5 se prova a muoversi contro un muro. Questo lo guida a trovare percorsi brevi ed efficaci.</p>
+  </div>
+  <div class="panel" id="panel3">
+    <h2>4. Addestramento ed esecuzione</h2>
+    <p>Durante l'addestramento esplora, mentre nell'esecuzione segue la politica ottimale appresa.</p>
+  </div>
+  <div class="controls">
+    <button onclick="prevPanel()">&larr; Indietro</button>
+    <button onclick="nextPanel()">Avanti &rarr;</button>
+  </div>
   <script>
-    const canvas = document.getElementById('mazeCanvas');
-    const ctx = canvas.getContext('2d');
-    const message = document.getElementById('message');
-    const bgMusic = document.getElementById('bgMusic');
-    bgMusic.volume = 0.75;
+    const maze = [
+      [0, 0, 1, 0, 0],
+      [1, 0, 1, 0, 1],
+      [0, 0, 0, 0, 0],
+      [0, 1, 1, 1, 0],
+      [0, 0, 0, 1, 0]
+    ];
+    const size = 5;
+    const goal = [4, 4];
+    let agent = [0, 0];
+    let q = {};
 
-    let cols, rows, cellSize;
-    let grid = [], stack = [], current;
-    let path = [], solutionPath = [];
-    let userPos = {i: 0, j: 0};
-
-    let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-    class Cell {
-      constructor(i, j) {
-        this.i = i;
-        this.j = j;
-        this.walls = [true, true, true, true];
-        this.visited = false;
-      }
-
-      index(i, j) {
-        if (i < 0 || j < 0 || i >= cols || j >= rows) return -1;
-        return i + j * cols;
-      }
-
-      checkNeighbors() {
-        let neighbors = [];
-        let top = grid[this.index(this.i, this.j - 1)];
-        let right = grid[this.index(this.i + 1, this.j)];
-        let bottom = grid[this.index(this.i, this.j + 1)];
-        let left = grid[this.index(this.i - 1, this.j)];
-
-        if (top && !top.visited) neighbors.push(top);
-        if (right && !right.visited) neighbors.push(right);
-        if (bottom && !bottom.visited) neighbors.push(bottom);
-        if (left && !left.visited) neighbors.push(left);
-
-        if (neighbors.length > 0) {
-          return neighbors[Math.floor(Math.random() * neighbors.length)];
-        } else return undefined;
-      }
-
-      show() {
-        const x = this.i * cellSize;
-        const y = this.j * cellSize;
-        ctx.strokeStyle = 'lime';
-        ctx.lineWidth = 2;
-        if (this.walls[0]) drawLine(x, y, x + cellSize, y);
-        if (this.walls[1]) drawLine(x + cellSize, y, x + cellSize, y + cellSize);
-        if (this.walls[2]) drawLine(x + cellSize, y + cellSize, x, y + cellSize);
-        if (this.walls[3]) drawLine(x, y + cellSize, x, y);
-      }
+    function stateKey([x, y]) {
+      return `${x},${y}`;
     }
 
-    function drawLine(x1, y1, x2, y2) {
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
+    function availableActions([x, y]) {
+      const actions = [];
+      if (x > 0 && maze[y][x - 1] === 0) actions.push([-1, 0]);
+      if (x < size - 1 && maze[y][x + 1] === 0) actions.push([1, 0]);
+      if (y > 0 && maze[y - 1][x] === 0) actions.push([0, -1]);
+      if (y < size - 1 && maze[y + 1][x] === 0) actions.push([0, 1]);
+      return actions;
     }
 
-    function removeWalls(a, b) {
-      const dx = a.i - b.i;
-      const dy = a.j - b.j;
-      if (dx === 1) { a.walls[3] = false; b.walls[1] = false; }
-      else if (dx === -1) { a.walls[1] = false; b.walls[3] = false; }
-      if (dy === 1) { a.walls[0] = false; b.walls[2] = false; }
-      else if (dy === -1) { a.walls[2] = false; b.walls[0] = false; }
-    }
-
-    function generateMaze() {
-      message.textContent = "GENERAZIONE...";
-      resizeCanvas();
-      grid = [];
-      stack = [];
-      path = [];
-      for (let j = 0; j < rows; j++) {
-        for (let i = 0; i < cols; i++) {
-          grid.push(new Cell(i, j));
+    function train(episodes = 1000, alpha = 0.1, gamma = 0.9, epsilon = 0.2) {
+      for (let i = 0; i < episodes; i++) {
+        let pos = [0, 0];
+        while (true) {
+          const key = stateKey(pos);
+          q[key] = q[key] || {};
+          const actions = availableActions(pos);
+          const a = Math.random() < epsilon ? actions[Math.floor(Math.random() * actions.length)] : actions.reduce((best, a) => q[key][a] > (q[key][best] || 0) ? a : best, actions[0]);
+          const next = [pos[0] + a[0], pos[1] + a[1]];
+          const reward = (next[0] === goal[0] && next[1] === goal[1]) ? 100 : -1;
+          const nextKey = stateKey(next);
+          q[key][a] = (q[key][a] || 0) + alpha * (reward + gamma * Math.max(...Object.values(q[nextKey] || {})) - (q[key][a] || 0));
+          pos = next;
+          if (pos[0] === goal[0] && pos[1] === goal[1]) break;
         }
       }
-      current = grid[0];
-      function step() {
-        current.visited = true;
-        const next = current.checkNeighbors();
-        if (next) {
-          next.visited = true;
-          stack.push(current);
-          removeWalls(current, next);
-          current = next;
-          requestAnimationFrame(step);
-        } else if (stack.length > 0) {
-          current = stack.pop();
-          requestAnimationFrame(step);
-        } else {
-          drawMaze();
-          message.textContent = "PRONTO? TRACCIA IL PERCORSO!";
-          userPos = {i: 0, j: 0};
-          path = [userPos];
-          drawUserPath();
-        }
+      alert("Addestramento completato!");
+    }
+
+    async function runAgent() {
+      agent = [0, 0];
+      renderMaze();
+      while (agent[0] !== goal[0] || agent[1] !== goal[1]) {
+        await new Promise(r => setTimeout(r, 300));
+        const actions = q[stateKey(agent)];
+        const best = Object.entries(actions).reduce((a, b) => a[1] > b[1] ? a : b);
+        const [dx, dy] = JSON.parse(`[${best[0]}]`);
+        agent = [agent[0] + dx, agent[1] + dy];
+        renderMaze();
       }
-      step();
+      alert("Obiettivo raggiunto!");
     }
 
-    function resizeCanvas() {
-      canvas.width = window.innerWidth * 0.9;
-      canvas.height = window.innerHeight * 0.6;
-      cols = 20;
-      cellSize = Math.floor(canvas.width / cols);
-      rows = Math.floor(canvas.height / cellSize);
-    }
-
-    function drawMaze() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      grid.forEach(c => c.show());
-      drawStartEnd();
-    }
-
-    function drawStartEnd() {
-      ctx.fillStyle = 'lime';
-      ctx.fillRect(2, 2, cellSize - 4, cellSize - 4);
-      ctx.fillRect(
-        (cols - 1) * cellSize + 2,
-        (rows - 1) * cellSize + 2,
-        cellSize - 4,
-        cellSize - 4
-      );
-    }
-
-    function resetPath() {
-      userPos = {i: 0, j: 0};
-      path = [userPos];
-      drawMaze();
-      drawUserPath();
-    }
-
-    canvas.addEventListener("pointerdown", e => moveFromEvent(e));
-    canvas.addEventListener("pointermove", e => moveFromEvent(e));
-
-    function moveFromEvent(e) {
-      e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const i = Math.floor(x / cellSize);
-      const j = Math.floor(y / cellSize);
-
-      if (i === userPos.i && j === userPos.j) return;
-
-      const dirI = i - userPos.i;
-      const dirJ = j - userPos.j;
-
-      if (Math.abs(dirI) + Math.abs(dirJ) === 1) {
-        const currentCell = grid[userPos.i + userPos.j * cols];
-        const nextCell = grid[i + j * cols];
-        if (!currentCell || !nextCell) return;
-        const dirMap = {
-          "0,-1": 0, "1,0": 1, "0,1": 2, "-1,0": 3
-        };
-        const wallDir = dirMap[`${dirI},${dirJ}`];
-        if (!currentCell.walls[wallDir]) {
-          userPos = {i, j};
-          path.push(userPos);
-          drawUserPath();
+    function renderMaze() {
+      const mazeEl = document.getElementById("maze");
+      mazeEl.innerHTML = "";
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const div = document.createElement("div");
+          div.className = "cell";
+          if (maze[y][x] === 1) div.classList.add("wall");
+          if (x === agent[0] && y === agent[1]) div.classList.add("agent");
+          if (x === goal[0] && y === goal[1]) div.classList.add("goal");
+          mazeEl.appendChild(div);
         }
       }
     }
 
-    function drawUserPath() {
-      drawMaze();
-      ctx.strokeStyle = 'aqua';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      path.forEach((pt, idx) => {
-        const x = pt.i * cellSize + cellSize / 2;
-        const y = pt.j * cellSize + cellSize / 2;
-        if (idx === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-    }
+    renderMaze();
 
-    function solveMaze() {
-      message.textContent = "SOLUZIONE IN CORSO...";
-      solutionPath = [];
-      const visited = new Set();
-      function dfs(cell) {
-        solutionPath.push(cell);
-        if (cell.i === cols - 1 && cell.j === rows - 1) return true;
-        visited.add(cell.i + ',' + cell.j);
-        const dirs = [[0,-1,0], [1,0,1], [0,1,2], [-1,0,3]];
-        for (let [dx, dy, dir] of dirs) {
-          const ni = cell.i + dx;
-          const nj = cell.j + dy;
-          const neighbor = grid[cell.index(ni, nj)];
-          if (!neighbor || visited.has(ni + ',' + nj)) continue;
-          if (!cell.walls[dir]) {
-            if (dfs(neighbor)) return true;
-          }
-        }
-        solutionPath.pop();
-        return false;
-      }
-      dfs(grid[0]);
+    let panelIndex = 0;
+    function showPanel(index) {
+      document.querySelectorAll('.panel').forEach((el, i) => el.classList.toggle('active', i === index));
     }
-
-    function showSolution() {
-      solveMaze();
-      let i = 0;
-      function drawStep() {
-        if (i >= solutionPath.length) {
-          message.textContent = "FINE!";
-          return;
-        }
-        const pt = solutionPath[i];
-        const x = pt.i * cellSize + cellSize / 2;
-        const y = pt.j * cellSize + cellSize / 2;
-        if (i === 0) ctx.beginPath();
-        else ctx.lineTo(x, y);
-        if (i === 0) ctx.moveTo(x, y);
-        ctx.strokeStyle = 'red';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        playBeep(i);
-        i++;
-        setTimeout(drawStep, 40);
-      }
-      drawStep();
+    function nextPanel() {
+      if (panelIndex < 3) showPanel(++panelIndex);
     }
-
-    function playBeep(step) {
-      const oscillator = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(200 + step * 10, audioCtx.currentTime);
-      gain.gain.setValueAtTime(0.02, audioCtx.currentTime);
-      oscillator.connect(gain);
-      gain.connect(audioCtx.destination);
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + 0.1);
+    function prevPanel() {
+      if (panelIndex > 0) showPanel(--panelIndex);
     }
-
-    window.addEventListener('resize', generateMaze);
-    generateMaze();
   </script>
 </body>
 </html>
